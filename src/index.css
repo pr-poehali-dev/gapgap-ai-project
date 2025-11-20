@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,41 +15,34 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 291 95% 68%;
+    --secondary-foreground: 0 0% 100%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 199 89% 48%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 262 83% 58%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
@@ -61,17 +56,17 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 291 95% 68%;
+    --secondary-foreground: 0 0% 100%;
 
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 199 89% 48%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
@@ -97,5 +92,66 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family:
+      "Montserrat",
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+  }
+}
+
+@layer utilities {
+  .gradient-purple {
+    background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
