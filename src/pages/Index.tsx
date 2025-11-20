@@ -1,43 +1,186 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
+  id?: number;
   role: 'user' | 'assistant';
   content: string;
 }
 
+interface User {
+  id: number;
+  email: string;
+  name: string;
+  subscription_plan: string;
+}
+
+interface Chat {
+  id: number;
+  title: string;
+  updated_at: string;
+}
+
+const AUTH_URL = 'https://functions.poehali.dev/514ada78-49f0-41d5-b722-dec6a8a6e411';
+const CHAT_URL = 'https://functions.poehali.dev/1dc9af25-0e8e-410e-8254-36d7d76a1dcd';
+
 const Index = () => {
   const [activeTab, setActiveTab] = useState('home');
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Привет! Я GapGap AI. Чем могу помочь?' }
-  ]);
+  const [user, setUser] = useState<User | null>(null);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<number | null>(null);
+  const { toast } = useToast();
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
 
-    const newMessage: Message = { role: 'user', content: inputValue };
-    setMessages(prev => [...prev, newMessage]);
+  useEffect(() => {
+    if (user) {
+      loadChats();
+    }
+  }, [user]);
+
+  const loadChats = async () => {
+    if (!user) return;
+    try {
+      const response = await fetch(`${CHAT_URL}?userId=${user.id}`);
+      const data = await response.json();
+      setChats(data.chats || []);
+    } catch (error) {
+      console.error('Failed to load chats:', error);
+    }
+  };
+
+  const loadChatMessages = async (chatId: number) => {
+    try {
+      const response = await fetch(`${CHAT_URL}?userId=${user?.id}&chatId=${chatId}`);
+      const data = await response.json();
+      setMessages(data.messages || []);
+      setCurrentChatId(chatId);
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось загрузить сообщения', variant: 'destructive' });
+    }
+  };
+
+  const handleAuth = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    const name = formData.get('name') as string;
+
+    try {
+      const response = await fetch(AUTH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: authMode,
+          email,
+          password,
+          name: authMode === 'register' ? name : undefined
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('token', data.token);
+        setShowAuthDialog(false);
+        toast({ title: 'Успешно!', description: authMode === 'register' ? 'Аккаунт создан' : 'Вы вошли в систему' });
+      } else {
+        toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось подключиться к серверу', variant: 'destructive' });
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setMessages([]);
+    setChats([]);
+    setCurrentChatId(null);
+    toast({ title: 'Вы вышли из аккаунта' });
+  };
+
+  const createNewChat = async () => {
+    if (!user) {
+      setShowAuthDialog(true);
+      return;
+    }
+
+    try {
+      const response = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', userId: user.id })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setCurrentChatId(data.chat.id);
+        setMessages([]);
+        await loadChats();
+        setActiveTab('chat');
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось создать чат', variant: 'destructive' });
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || !user || !currentChatId) return;
+
+    const userMessage: Message = { role: 'user', content: inputValue };
+    setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const responses = [
-        'Отличный вопрос! GapGap AI может помочь вам с различными задачами.',
-        'Я проанализировал ваш запрос. Вот что я могу предложить...',
-        'Интересно! Давайте разберём это детальнее.',
-        'Понял вас. Моя нейросеть обработала запрос и готова помочь!'
-      ];
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-      setMessages(prev => [...prev, { role: 'assistant', content: randomResponse }]);
+    try {
+      const response = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send',
+          userId: user.id,
+          chatId: currentChatId,
+          message: inputValue
+        })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setMessages(prev => [...prev, data.assistantMessage]);
+      } else {
+        toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось отправить сообщение', variant: 'destructive' });
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -58,7 +201,15 @@ const Index = () => {
               Главная
             </button>
             <button 
-              onClick={() => setActiveTab('chat')}
+              onClick={() => {
+                if (!user) {
+                  setShowAuthDialog(true);
+                } else if (!currentChatId) {
+                  createNewChat();
+                } else {
+                  setActiveTab('chat');
+                }
+              }}
               className={`text-sm font-medium transition-colors ${activeTab === 'chat' ? 'text-primary' : 'text-gray-600 hover:text-gray-900'}`}
             >
               Чат с ИИ
@@ -76,9 +227,21 @@ const Index = () => {
               API
             </button>
           </div>
-          <Button className="gradient-purple text-white hover:opacity-90 transition-opacity">
-            Начать
-          </Button>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <>
+                <span className="text-sm text-gray-600 hidden md:block">👋 {user.name}</span>
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  <Icon name="LogOut" size={16} className="mr-2" />
+                  Выйти
+                </Button>
+              </>
+            ) : (
+              <Button className="gradient-purple text-white hover:opacity-90" onClick={() => setShowAuthDialog(true)}>
+                Войти
+              </Button>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -99,7 +262,13 @@ const Index = () => {
                 <Button 
                   size="lg" 
                   className="gradient-purple text-white hover:opacity-90 transition-all hover:scale-105"
-                  onClick={() => setActiveTab('chat')}
+                  onClick={() => {
+                    if (!user) {
+                      setShowAuthDialog(true);
+                    } else {
+                      createNewChat();
+                    }
+                  }}
                 >
                   <Icon name="MessageSquare" size={20} className="mr-2" />
                   Попробовать бесплатно
@@ -182,8 +351,38 @@ const Index = () => {
         )}
 
         {activeTab === 'chat' && (
-          <div className="container mx-auto px-4 py-12 max-w-5xl">
-            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
+          <div className="container mx-auto px-4 py-12 flex gap-4" style={{ height: 'calc(100vh - 120px)' }}>
+            {user && (
+              <Card className="w-64 flex-shrink-0">
+                <CardHeader>
+                  <CardTitle className="text-lg">История чатов</CardTitle>
+                  <Button size="sm" className="w-full gradient-purple text-white" onClick={createNewChat}>
+                    <Icon name="Plus" size={16} className="mr-2" />
+                    Новый чат
+                  </Button>
+                </CardHeader>
+                <CardContent className="p-2">
+                  <ScrollArea className="h-[calc(100vh-280px)]">
+                    {chats.map(chat => (
+                      <button
+                        key={chat.id}
+                        onClick={() => loadChatMessages(chat.id)}
+                        className={`w-full text-left p-3 rounded-lg mb-2 transition-colors ${
+                          currentChatId === chat.id ? 'bg-purple-100' : 'hover:bg-gray-100'
+                        }`}
+                      >
+                        <div className="font-medium text-sm truncate">{chat.title}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(chat.updated_at).toLocaleDateString('ru')}
+                        </div>
+                      </button>
+                    ))}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex-1 bg-white rounded-3xl shadow-2xl overflow-hidden">
               <div className="flex flex-col h-full">
                 <div className="border-b p-6 bg-gradient-to-r from-purple-50 to-pink-50">
                   <h2 className="text-2xl font-bold gradient-text mb-2">Чат с GapGap AI</h2>
@@ -191,30 +390,39 @@ const Index = () => {
                 </div>
                 
                 <ScrollArea className="flex-1 p-6">
-                  <div className="space-y-4">
-                    {messages.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[70%] rounded-2xl px-6 py-4 ${
-                          msg.role === 'user' 
-                            ? 'gradient-purple text-white' 
-                            : 'bg-gray-100 text-gray-900'
-                        }`}>
-                          <p className="text-sm leading-relaxed">{msg.content}</p>
-                        </div>
+                  {messages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-400">
+                      <div className="text-center">
+                        <Icon name="MessageSquare" size={48} className="mx-auto mb-4 opacity-50" />
+                        <p>Начните новый диалог с ИИ</p>
                       </div>
-                    ))}
-                    {isTyping && (
-                      <div className="flex justify-start">
-                        <div className="bg-gray-100 rounded-2xl px-6 py-4">
-                          <div className="flex gap-2">
-                            <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                            <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                            <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {messages.map((msg, idx) => (
+                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[70%] rounded-2xl px-6 py-4 ${
+                            msg.role === 'user' 
+                              ? 'gradient-purple text-white' 
+                              : 'bg-gray-100 text-gray-900'
+                          }`}>
+                            <pre className="text-sm leading-relaxed whitespace-pre-wrap font-sans">{msg.content}</pre>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      ))}
+                      {isTyping && (
+                        <div className="flex justify-start">
+                          <div className="bg-gray-100 rounded-2xl px-6 py-4">
+                            <div className="flex gap-2">
+                              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </ScrollArea>
 
                 <div className="border-t p-6 bg-gray-50">
@@ -223,13 +431,15 @@ const Index = () => {
                       placeholder="Введите ваше сообщение..."
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                      onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                       className="flex-1 h-12 text-base"
+                      disabled={!currentChatId}
                     />
                     <Button 
                       size="lg" 
                       className="gradient-purple text-white hover:opacity-90 px-8"
                       onClick={handleSendMessage}
+                      disabled={!currentChatId}
                     >
                       <Icon name="Send" size={20} />
                     </Button>
@@ -266,7 +476,9 @@ const Index = () => {
                       </li>
                     ))}
                   </ul>
-                  <Button className="w-full mt-6" variant="outline">Начать бесплатно</Button>
+                  <Button className="w-full mt-6" variant="outline" onClick={() => setShowAuthDialog(true)}>
+                    Начать бесплатно
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -433,6 +645,62 @@ console.log(response.message);`}
           </div>
         </div>
       </footer>
+
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl gradient-text">
+              {authMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}
+            </DialogTitle>
+            <DialogDescription>
+              {authMode === 'login' ? 'Войдите, чтобы продолжить' : 'Создайте аккаунт за 30 секунд'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={authMode} onValueChange={(v) => setAuthMode(v as 'login' | 'register')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Вход</TabsTrigger>
+              <TabsTrigger value="register">Регистрация</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="login">
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div>
+                  <Label htmlFor="login-email">Email</Label>
+                  <Input id="login-email" name="email" type="email" required />
+                </div>
+                <div>
+                  <Label htmlFor="login-password">Пароль</Label>
+                  <Input id="login-password" name="password" type="password" required />
+                </div>
+                <Button type="submit" className="w-full gradient-purple text-white">
+                  Войти
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="register">
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div>
+                  <Label htmlFor="register-name">Имя</Label>
+                  <Input id="register-name" name="name" required />
+                </div>
+                <div>
+                  <Label htmlFor="register-email">Email</Label>
+                  <Input id="register-email" name="email" type="email" required />
+                </div>
+                <div>
+                  <Label htmlFor="register-password">Пароль</Label>
+                  <Input id="register-password" name="password" type="password" required />
+                </div>
+                <Button type="submit" className="w-full gradient-purple text-white">
+                  Создать аккаунт
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
